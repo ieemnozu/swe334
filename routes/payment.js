@@ -2,7 +2,7 @@ const express = require('express');
 const authGuard = require('../middleware/authGuard');
 const { requireRoles } = require('../middleware/roleGuard'); 
 
-const PaymentController = require('../controllers/payment');
+const PaymentController = require('../controller/payment');
 const Payment = require('../models/Payment');
 
 const router = express.Router();
@@ -26,13 +26,25 @@ router.route('/:id/order')
 router.route('/admin/all')
   .get(authGuard, requireRoles(30), paymentController.getAllPayments.bind(paymentController));
 
-router.route('/admin/status/:status')
-  .get(authGuard, requireRoles(30), paymentController.getPaymentsByStatus.bind(paymentController));
-
 router.route('/admin/:id/status')
   .put(authGuard, requireRoles(30), paymentController.updatePaymentStatus.bind(paymentController));
 
 router.route('/admin/:id')
   .delete(authGuard, requireRoles(30), paymentController.deletePayment.bind(paymentController));
+// ✅ Admin verifies payment → order CONFIRMED
+router.put(
+  '/admin/:id/verify',
+  authGuard,
+  requireRoles(30),
+  paymentController.verifyPayment.bind(paymentController)
+);
+
+// ✅ Admin marks payment as FAILED → order PAYMENT_FAILED
+router.put(
+  '/admin/:id/fail',
+  authGuard,
+  requireRoles(30),
+  paymentController.failPayment.bind(paymentController)
+);
 
 module.exports = router;

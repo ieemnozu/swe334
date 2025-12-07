@@ -10,7 +10,6 @@ const categoriesRoutes = require("./routes/categories");
 const authRoutes = require("./routes/auth");
 const appRoutes = require("./routes/app");
 const productRoutes = require("./routes/productRoutes");
-const userRoutes = require("./routes/users");
 const brandRoutes = require("./routes/brand");
 const cartRoutes = require("./routes/cart");
 const discountRoutes = require("./routes/discount");
@@ -18,6 +17,8 @@ const orderItemRoutes = require("./routes/orderitem");
 const checkoutRoutes = require("./routes/checkout");
 const warehouseRoutes = require("./routes/warehouse");
 const orderRoutes = require("./routes/orders");
+const paymentRoutes = require("./routes/payment");
+
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -32,7 +33,6 @@ app.use("/api", appRoutes);
 app.use("/api/categories", categoriesRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/products", productRoutes);
-app.use("/api/users", userRoutes);
 app.use("/api/brands", brandRoutes);
 app.use("/api/cart", cartRoutes);
 app.use("/api/discounts", discountRoutes);
@@ -40,6 +40,7 @@ app.use("/api/order-items", orderItemRoutes);
 app.use("/api/checkout", checkoutRoutes);
 app.use("/api/warehouses", warehouseRoutes);
 app.use("/api/orders", orderRoutes);
+app.use("/api/payments", paymentRoutes);
 
 // ✅ Error handler must be LAST
 app.use(errorHandler);

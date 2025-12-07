@@ -1,3 +1,4 @@
+const { pool } = require("../db");
 const Payment = require('../models/Payment');
 
 class PaymentController {
@@ -197,6 +198,128 @@ class PaymentController {
       next(err);
     }
   }
+  // ✅ Admin: verify payment
+  async verifyPayment(req, res) {
+  const paymentId = req.params.id;
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    // 1️⃣ get payment
+    const paymentRes = await client.query(
+      `SELECT id, status
+       FROM payments
+       WHERE id = $1`,
+      [paymentId]
+    );
+
+    if (paymentRes.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ message: "Payment not found" });
+    }
+
+    const payment = paymentRes.rows[0];
+
+    if (payment.status !== "PENDING") {
+      await client.query("ROLLBACK");
+      return res.status(400).json({
+        message: "Only PENDING payments can be verified",
+      });
+    }
+
+    // 2️⃣ update payment
+    await client.query(
+      `UPDATE payments
+       SET status = 'VERIFIED'
+       WHERE id = $1`,
+      [paymentId]
+    );
+
+    // 3️⃣ update order USING payment_id ✅
+    const orderUpdate = await client.query(
+      `UPDATE orders
+       SET status = 'CONFIRMED'
+       WHERE payment_id = $1
+       RETURNING id`,
+      [paymentId]
+    );
+
+    if (orderUpdate.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({
+        message: "No order linked to this payment",
+      });
+    }
+
+    await client.query("COMMIT");
+
+    return res.json({
+      message: "Payment verified and order confirmed",
+      orderId: orderUpdate.rows[0].id,
+    });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("verifyPayment error:", err);
+    return res.status(500).json({ message: "Server error" });
+  } finally {
+    client.release();
+  }
+}
+
+  // ✅ Admin: fail payment
+  async failPayment(req, res) {
+  const paymentId = req.params.id;
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    const paymentRes = await client.query(
+      `SELECT id, status
+       FROM payments
+       WHERE id = $1`,
+      [paymentId]
+    );
+
+    if (paymentRes.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ message: "Payment not found" });
+    }
+
+    if (paymentRes.rows[0].status !== "PENDING") {
+      await client.query("ROLLBACK");
+      return res.status(400).json({
+        message: "Only PENDING payments can be failed",
+      });
+    }
+
+    await client.query(
+      `UPDATE payments SET status = 'FAILED' WHERE id = $1`,
+      [paymentId]
+    );
+
+    await client.query(
+      `UPDATE orders
+       SET status = 'PAYMENT_FAILED'
+       WHERE payment_id = $1`,
+      [paymentId]
+    );
+
+    await client.query("COMMIT");
+
+    return res.json({
+      message: "Payment failed and order marked as PAYMENT_FAILED",
+    });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("failPayment error:", err);
+    return res.status(500).json({ message: "Server error" });
+  } finally {
+    client.release();
+  }
+}
+
 }
 
 module.exports = PaymentController;

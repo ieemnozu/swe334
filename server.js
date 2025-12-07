@@ -5,10 +5,6 @@ const { connectDB } = require("./db");
 
 const logger = require("./middleware/logger");
 const errorHandler = require("./middleware/error");
-app.get("/", (req, res) => {
-  res.send("✅ API is running");
-});
-
 // Routes
 const categoriesRoutes = require("./routes/categories");
 const authRoutes = require("./routes/auth");

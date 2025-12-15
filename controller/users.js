@@ -41,9 +41,9 @@ class UserController {
         user
       });
     } catch (err) {
-      console.error(err);
-      return res.status(500).json({ message: "Registration failed" });
+      next(err);
     }
+
   }
 
   async login(req, res) {
@@ -66,12 +66,18 @@ class UserController {
         JWT_SECRET,
         { expiresIn: '1h' }
       );
+      if (!user.is_verified && user.role !== 30) {
+        return res.status(403).json({
+          message: "Please verify your email before logging in",
+        });
+      }
+
 
       return res.json({ token });
     } catch (err) {
-      console.error(err);
-      return res.status(500).json({ message: "Login failed" });
-    }
+        next(err);
+      }
+
   }
 
   async profile(req, res) {
@@ -110,7 +116,58 @@ class UserController {
     return res.status(500).json({ message: "Failed to change password" });
   }
 }
+// controller/users.js
+async updateUser(req, res, next) {
+  try {
+    const { id } = req.params;
+    const { username, email, phone, role } = req.body;
 
+    // Basic validation
+    if (!username || !email) {
+      return res.status(400).json({
+        message: "Username and email are required",
+      });
+    }
+
+    const updatedUser = await User.updateUser(id, {
+      username,
+      email,
+      phone,
+      role,
+    });
+
+    if (!updatedUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.json({
+      success: true,
+      message: "User updated successfully",
+      data: updatedUser,
+    });
+  } catch (err) {
+    next(err); // 🔥 goes to error logger
+  }
+}
+
+async deleteUser(req, res, next) {
+  try {
+    const { id } = req.params;
+
+    const deletedUser = await User.deleteUserById(id);
+
+    if (!deletedUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.json({
+      success: true,
+      message: "User deleted successfully",
+    });
+  } catch (err) {
+    next(err);
+  }
+}
 }
 
 module.exports = UserController;

@@ -1,17 +1,15 @@
 const transporter = require("../config/mailer");
 
-async function sendVerificationEmail(email, token) {
-  const verifyUrl = `${process.env.SERVER_URL}/api/auth/verify-email?token=${token}`;
-
+async function sendVerificationEmail(email, otp) {
   await transporter.sendMail({
     from: `"My Shop" <${process.env.EMAIL_USER}>`,
     to: email,
-    subject: "Verify your email",
+    subject: "Your Email Verification Code",
     html: `
-      <h2>Verify your email</h2>
-      <p>Click the link below to verify your account:</p>
-      <a href="${verifyUrl}">${verifyUrl}</a>
-      <p>This link will expire in 1 hour.</p>
+      <h2>Email Verification</h2>
+      <p>Your verification code is:</p>
+      <h1 style="letter-spacing: 3px;">${otp}</h1>
+      <p>This code will expire in 10 minutes.</p>
     `,
   });
 }

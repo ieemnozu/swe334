@@ -42,49 +42,46 @@ async getProductById(req, res, next) {
   }
 }
 
-
   // 🟢 CREATE product
   async createProduct(req, res, next) {
-    try {
-      const newProduct = await this.model.createProduct(req.body);
+  try {
+    const newProduct = await this.model.createProduct(
+      req.body,
+      req.files
+    );
 
-      res.status(201).json({
-        success: true,
-        message: 'Product created successfully',
-        data: newProduct,
-      });
-    } catch (err) {
-      res.status(400).json({
-        success: false,
-        error: err.message,
-      });
-    }
+    res.status(201).json({
+      success: true,
+      message: "Product created successfully",
+      data: newProduct,
+    });
+  } catch (err) {
+    res.status(400).json({
+      success: false,
+      error: err.message,
+    });
   }
+}
 
-  // 🟢 UPDATE product
+
   async updateProduct(req, res, next) {
-    try {
-      const updatedProduct = await this.model.updateProduct(req.params.id, req.body);
+  try {
+    const updated = await this.model.updateProduct(
+      req.params.id,
+      req.body,
+      req.files   // 👈 important for images
+    );
 
-      if (!updatedProduct) {
-        return res.status(404).json({
-          success: false,
-          error: `Product with ID ${req.params.id} not found`,
-        });
-      }
-
-      res.status(200).json({
-        success: true,
-        message: 'Product updated successfully',
-        data: updatedProduct,
-      });
-    } catch (err) {
-      res.status(400).json({
-        success: false,
-        error: err.message,
-      });
-    }
+    res.json({
+      success: true,
+      message: "Product updated successfully",
+      data: updated,
+    });
+  } catch (err) {
+    next(err);
   }
+}
+
 
   // 🟢 DELETE product
   async deleteProduct(req, res, next) {

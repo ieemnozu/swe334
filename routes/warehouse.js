@@ -12,14 +12,6 @@ router.route('/')
   .get(authGuard, warehouseController.getAllWarehouses.bind(warehouseController))
   .post(authGuard, requireRoles(30), warehouseController.createWarehouse.bind(warehouseController));
 
-// ✅ Search warehouses (accessible to all authenticated users)
-router.route('/search')
-  .get(authGuard, warehouseController.searchWarehouses.bind(warehouseController));
-
-// ✅ Admin-only routes (require role 30 - likely admin/manager)
-router.route('/stats')
-  .get(authGuard, requireRoles(30), warehouseController.getWarehousesWithStats.bind(warehouseController));
-
 // ✅ Routes with ID parameter
 router.route('/:id')
   .get(authGuard, warehouseController.getWarehouseById.bind(warehouseController))

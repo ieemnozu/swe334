@@ -27,6 +27,9 @@ const PORT = process.env.PORT || 5000;
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(logger);
+app.get("/test-error", (req, res, next) => {
+  next(new Error("Test error works!"));
+});
 
 // ✅ Routes
 app.use("/api", appRoutes);
@@ -41,6 +44,8 @@ app.use("/api/checkout", checkoutRoutes);
 app.use("/api/warehouses", warehouseRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/payments", paymentRoutes);
+app.use("/uploads", express.static("uploads"));
+
 
 // ✅ Error handler must be LAST
 app.use(errorHandler);
@@ -59,3 +64,4 @@ app.use(errorHandler);
     process.exit(1);
   }
 })();
+

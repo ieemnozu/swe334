@@ -43,6 +43,13 @@ class User {
     await pool.query(`DELETE FROM ${tableName} WHERE id = $1`, [id]);
     return true;
   }
+  async deleteUserById(id) {
+    const result = await pool.query(
+      `DELETE FROM ${tableName} WHERE id = $1 RETURNING *`,
+      [id]
+    );
+    return result.rows[0];
+  }
   async updatePassword(id, hashedPassword) {
   const result = await pool.query(
     `UPDATE ${tableName} SET password=$1 WHERE id=$2 RETURNING *`,

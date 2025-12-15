@@ -77,65 +77,113 @@ class Product {
   }
 
   /* =====================================================================
-     HELPER: ATTRIBUTES (YOUR VERSION, CLEANED UP)
+     HELPER: ATTRIBUTES 
      - Keeps normalized schema:
        attributes, attribute_values, product_attributes
   ===================================================================== */
 
   async getOrCreateAttributeIds(client, attributeName, valueName, category_id) {
-    try {
-      // Validate inputs
-      if (!attributeName || !valueName || !category_id) {
-        throw new Error('Attribute name, value, and category ID are required');
-      }
+  try {
+    if (!attributeName || !valueName || !category_id) {
+      throw new Error("Attribute name, value, and category ID are required");
+    }
 
-      // 1️⃣ Attribute
-      let attribute = await client.query(
-        `SELECT id 
-         FROM attributes 
-         WHERE name = $1 AND category_id = $2`,
-        [attributeName, category_id]
+    // 1️⃣ Attribute
+    const attributeRes = await client.query(
+      `SELECT id
+       FROM attributes
+       WHERE name = $1 AND category_id = $2`,
+      [attributeName, category_id]
+    );
+
+    let attribute_id;
+    if (attributeRes.rowCount === 0) {
+      const newAttr = await client.query(
+        `INSERT INTO attributes (name, category_id)
+         VALUES ($1, $2)
+         RETURNING id`,
+        [attributeName, category_id] 
       );
+      attribute_id = newAttr.rows[0].id;
+    } else {
+      attribute_id = attributeRes.rows[0].id;
+    }
 
-      let attribute_id;
-      if (attribute.rowCount === 0) {
-        const newA = await client.query(
-          `INSERT INTO attributes (name, category_id) 
-           VALUES ($1, $2) 
-           RETURNING id`,
-          [attributeName, category_id]
-        );
-        attribute_id = newA.rows[0].id;
-      } else {
-        attribute_id = attribute.rows[0].id;
-      }
+    // 2️⃣ Attribute value
+    const valueRes = await client.query(
+      `SELECT id
+       FROM attribute_values
+       WHERE attribute_id = $1 AND value = $2`,
+      [attribute_id, valueName]
+    );
 
-      // 2️⃣ Attribute value
-      let value = await client.query(
-        `SELECT id 
-         FROM attribute_values 
-         WHERE attribute_id = $1 AND value = $2`,
+    let attribute_value_id;
+    if (valueRes.rowCount === 0) {
+      const newVal = await client.query(
+        `INSERT INTO attribute_values (attribute_id, value)
+         VALUES ($1, $2)
+         RETURNING id`,
         [attribute_id, valueName]
       );
-
-      let attribute_value_id;
-      if (value.rowCount === 0) {
-        const newV = await client.query(
-          `INSERT INTO attribute_values (attribute_id, value) 
-           VALUES ($1, $2) 
-           RETURNING id`,
-          [attribute_id, valueName]
-        );
-        attribute_value_id = newV.rows[0].id;
-      } else {
-        attribute_value_id = value.rows[0].id;
-      }
-
-      return { attribute_id, attribute_value_id };
-    } catch (error) {
-      throw new Error(`Attribute creation failed: ${error.message}`);
+      attribute_value_id = newVal.rows[0].id;
+    } else {
+      attribute_value_id = valueRes.rows[0].id;
     }
+
+    return { attribute_id, attribute_value_id };
+
+  } catch (error) {
+    throw new Error(`Attribute creation failed: ${error.message}`);
   }
+  }
+  async getProductWithAttributes(id) {
+  const client = await pool.connect();
+
+  try {
+    /* ---------- Product ---------- */
+    const productRes = await client.query(
+      `SELECT *
+       FROM products
+       WHERE id = $1`,
+      [id]
+    );
+
+    if (productRes.rowCount === 0) {
+      return null;
+    }
+
+    const product = productRes.rows[0];
+
+    /* ---------- Attributes ---------- */
+    const attributesRes = await client.query(
+      `SELECT
+         a.name AS attribute,
+         av.value
+       FROM product_attributes pa
+       JOIN attributes a ON a.id = pa.attribute_id
+       JOIN attribute_values av ON av.id = pa.attribute_value_id
+       WHERE pa.product_id = $1`,
+      [id]
+    );
+
+    product.attributes = attributesRes.rows;
+
+    /* ---------- Images ---------- */
+    const imagesRes = await client.query(
+      `SELECT image_url
+       FROM product_images
+       WHERE product_id = $1`,
+      [id]
+    );
+
+    product.images = imagesRes.rows.map(row => row.image_url);
+
+    return product;
+
+  } finally {
+    client.release();
+  }
+}
 
   /* =====================================================================
      HELPER: WAREHOUSE STOCK
@@ -176,13 +224,13 @@ class Product {
      - Sets warehouse_stock
   ===================================================================== */
 
-  async createProduct(dto) {
+  async createProduct(dto, files = []) {
     const client = await pool.connect();
 
     try {
       await client.query('BEGIN');
 
-      const {
+      let {
         brand_name,
         category_name,
         name,
@@ -202,6 +250,10 @@ class Product {
       if (!category_name) throw new Error('category_name is required');
       if (!status) throw new Error('Status is required');
       if (!warehouse_id) throw new Error('warehouse_id is required');
+      if (typeof attributes === "string") {
+        attributes = JSON.parse(attributes);
+      }
+
 
       if (price == null || price <= 0) {
         throw new Error('Price must be greater than zero');
@@ -227,6 +279,8 @@ class Product {
       /* -------- Brand & Category (ID + name) -------- */
       const brand = await this.getOrCreateBrand(client, brand_name);
       const category = await this.getOrCreateCategory(client, category_name);
+      /* -------- Save images -------- */
+
       // brand: { id, name }
       // category: { id, name }
 
@@ -254,7 +308,7 @@ class Product {
           ]
         )
       ).rows[0];
-
+      await this.saveProductImages(client, product.id, files);
       /* -------- Warehouse stock -------- */
       await this.upsertWarehouseStock(
         client,
@@ -293,26 +347,141 @@ class Product {
       client.release();
     }
   }
+async updateProduct(id, dto, files = []) {
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    let {
+      brand_name,
+      category_name,
+      name,
+      quantity,
+      type,
+      price,
+      size,
+      status,
+      warehouse_id,
+      warehouse_quantity,
+      attributes = []
+    } = dto;
+
+    if (typeof attributes === "string") {
+      attributes = JSON.parse(attributes);
+    }
+
+    /* ---------- Find product ---------- */
+    const existingRes = await client.query(
+      `SELECT * FROM products WHERE id = $1`,
+      [id]
+    );
+
+    if (existingRes.rowCount === 0) {
+      throw new Error("Product not found");
+    }
+
+    /* ---------- Brand & Category ---------- */
+    const brand = await this.getOrCreateBrand(client, brand_name);
+    const category = await this.getOrCreateCategory(client, category_name);
+
+    /* ---------- Update product ---------- */
+    const updatedProduct = (
+      await client.query(
+        `UPDATE products
+         SET brand_id = $1,
+             brand_name = $2,
+             category_id = $3,
+             category_name = $4,
+             name = $5,
+             quantity = $6,
+             type = $7,
+             price = $8,
+             size = $9,
+             status = $10
+         WHERE id = $11
+         RETURNING *`,
+        [
+          brand.id,
+          brand.name,
+          category.id,
+          category.name,
+          name,
+          quantity,
+          type,
+          price,
+          size,
+          status,
+          id
+        ]
+      )
+    ).rows[0];
+
+    /* ---------- Update warehouse stock ---------- */
+    await this.upsertWarehouseStock(
+      client,
+      id,
+      warehouse_id,
+      warehouse_quantity
+    );
+
+    /* ---------- Replace attributes ---------- */
+    await client.query(
+      `DELETE FROM product_attributes WHERE product_id = $1`,
+      [id]
+    );
+
+    for (const att of attributes) {
+      if (!att.attribute || !att.value) continue;
+
+      const { attribute_id, attribute_value_id } =
+        await this.getOrCreateAttributeIds(
+          client,
+          att.attribute,
+          att.value,
+          category.id
+        );
+
+      await client.query(
+        `INSERT INTO product_attributes
+         (product_id, attribute_id, attribute_value_id)
+         VALUES ($1, $2, $3)`,
+        [id, attribute_id, attribute_value_id]
+      );
+    }
+
+    /* ---------- Save new images (optional) ---------- */
+    await this.saveProductImages(client, id, files);
+
+    await client.query('COMMIT');
+    return updatedProduct;
+
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw new Error(`Product update failed: ${err.message}`);
+  } finally {
+    client.release();
+  }
+}
 
   /* =====================================================================
      GET ALL PRODUCTS (WITH TOTAL STOCK)
   ===================================================================== */
 
-  async getAllProducts(limit = 50, offset = 0) {
-    const res = await pool.query(
-      `SELECT
-         p.*,
-         COALESCE(SUM(ws.quantity), 0) AS total_stock
-       FROM ${this.#tableName} p
-       LEFT JOIN warehouse_stock ws ON ws.product_id = p.id
-       GROUP BY p.id
-       ORDER BY p.created_at DESC
-       LIMIT $1 OFFSET $2`,
-      [limit, offset]
-    );
+  async getAllProducts({ limit = 10, page = 0 }) {
+  const offset = page * limit;
 
-    return res.rows;
-  }
+  const result = await pool.query(
+    `SELECT *
+     FROM products
+     ORDER BY created_at DESC
+     LIMIT $1 OFFSET $2`,
+    [limit, offset]
+  );
+
+  return result.rows;
+}
+
 
   /* =====================================================================
      DELETE PRODUCT (cleans warehouse & attributes)
@@ -344,6 +513,15 @@ class Product {
       if (res.rowCount === 0) {
         throw new Error('Product not found');
       }
+      const imgs = await client.query(
+        "SELECT image_url FROM product_images WHERE product_id = $1",
+        [id]
+      );
+
+      for (const img of imgs.rows) {
+        const filePath = path.join(process.cwd(), img.image_url);
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      }
 
       await client.query('COMMIT');
       return res.rows[0];
@@ -355,6 +533,18 @@ class Product {
       client.release();
     }
   }
+  async saveProductImages(client, product_id, files) {
+  if (!files || files.length === 0) return;
+
+  for (const file of files) {
+    await client.query(
+      `INSERT INTO product_images (product_id, image_url)
+       VALUES ($1, $2)`,
+      [product_id, `/uploads/products/${file.filename}`]
+    );
+  }
+}
+
 }
 
 module.exports = Product;

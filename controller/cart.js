@@ -58,14 +58,6 @@ class CartController {
         });
       }
 
-      // ✅ SECURITY: Check if cart item belongs to current user
-      if (cart.user_id !== req.user_id) {
-        return res.status(403).json({
-          success: false,
-          error: 'Access denied - this cart item does not belong to you'
-        });
-      }
-
       res.status(200).json({
         success: true,
         data: cart
@@ -111,13 +103,6 @@ class CartController {
         });
       }
 
-      if (existingCart.user_id !== req.user_id) {
-        return res.status(403).json({
-          success: false,
-          error: 'Access denied - you can only update your own cart items'
-        });
-      }
-
       const updatedCart = await this.model.updateCart(cartId, req.body);
       res.status(200).json({
         success: true,
@@ -143,13 +128,6 @@ class CartController {
         return res.status(404).json({
           success: false,
           error: `Cart item with ID ${cartId} not found`
-        });
-      }
-
-      if (existingCart.user_id !== req.user_id) {
-        return res.status(403).json({
-          success: false,
-          error: 'Access denied - you can only delete your own cart items'
         });
       }
 

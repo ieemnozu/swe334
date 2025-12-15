@@ -19,8 +19,8 @@ router.route('/my-cart')
 
 // ✅ Specific cart item routes (with ownership checks)
 router.route('/:id')
-  .get(authGuard, cart.getCartById.bind(cart))        // Get specific cart item
-  .put(authGuard, cart.updateCart.bind(cart))         // Update cart item
-  .delete(authGuard, cart.deleteCart.bind(cart));     // Delete cart item
+  .get(authGuard, requireRoles(30), cart.getCartById.bind(cart))        // Get specific cart item
+  .put(authGuard, requireRoles(30), cart.updateCart.bind(cart))         // Update cart item
+  .delete(authGuard, requireRoles(30), cart.deleteCart.bind(cart));     // Delete cart item
 
 module.exports = router;
